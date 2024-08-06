@@ -276,13 +276,17 @@ local my_gui = flow.make_gui(function(player, ctx)
 				ctx.rebuild_player = true
 				return true
 			end})
-			table.insert(rb,gui.Button_exit { label = S("Exit") })
-		else
+			if not ctx.inside_sway then
+				table.insert(rb,gui.Button_exit { label = S("Exit") })
+			end
+		elseif not ctx.inside_sway then
 			table.insert(rb,gui.Button_exit { label = S("Exit"), expand = true, align_h = "right" })
+		else
+			table.insert(rb,gui.Spacer{})
 		end
 		rb.expand = true
 		rb.align_v = "bottom"
-		lb = {}
+		local lb = {}
 		if privs.server then
 			table.insert(lb,gui.Button { name = "tab_newplayer", label = "+", on_event = btn_event("newplayer"), w = 0.7, h = 0.7 })
 			table.insert(lb,gui.Button { name = "tab_delplayer", label = "-", on_event = btn_event("delplayer"), w = 0.7, h = 0.7 })
@@ -673,3 +677,51 @@ minetest.register_chatcommand("usermgr",{
 		return true
 	end
 })
+
+if minetest.global_exists("sway") then
+	local modname = "usermgr"
+	sway.register_page(modname..":gui", {
+		title = S("User Manager"),
+		get = function (self, player, ctx)
+			if not ctx[modname] then
+				ctx[modname] = { inside_sway = true }
+			end
+			return sway.Form {
+				my_gui:embed {
+					player = player,
+					name = modname,
+				}
+			}
+		end
+		-- Each tab has its own privilege setting, so we don't need an is_in_nav.
+		-- Players have a decent fallback if without any privelages
+	})
+	local function on_priv_change(player_name, _, priv)
+		if not sway.enabled then
+			return
+		end
+
+		-- If the priv isn't one of these, return
+		if priv ~= "server"
+		or priv ~= "privs"
+		or priv ~= "ban"
+		or priv ~= "kick"
+		or priv ~= "ctf_team_admin"
+		then
+			return
+		end
+
+		local player = minetest.get_player_by_name(player_name)
+		if not player then
+			return
+		end
+
+		if sway.get_page(player) ~= modname..":gui" then
+			return
+		end
+
+		sway.set_player_inventory_formspec(player)
+	end
+	minetest.register_on_priv_grant(on_priv_change)
+	minetest.register_on_priv_revoke(on_priv_change)
+end
